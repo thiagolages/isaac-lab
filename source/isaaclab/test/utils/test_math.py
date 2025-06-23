@@ -847,3 +847,73 @@ def test_interpolate_rotations():
 
         # Assert that the result is almost equal to the expected quaternion
         np.testing.assert_array_almost_equal(result_axis_angle.cpu(), expected, decimal=DECIMAL_PRECISION)
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda:0"])
+def test_angle_between_vecs_basic(device):
+    """Test angle_between_vecs with known angles."""
+    # Parallel vectors (angle = 0)
+    v1 = torch.tensor([[1.0, 0.0, 0.0]], device=device)
+    v2 = torch.tensor([[2.0, 0.0, 0.0]], device=device)
+    angle = math_utils.angle_between_vecs(v1, v2)
+    torch.testing.assert_close(angle, torch.tensor([0.0], device=device), atol=1e-5, rtol=1e-5)
+
+    # Anti-parallel vectors (angle = 180)
+    v1 = torch.tensor([[1.0, 0.0, 0.0]], device=device)
+    v2 = torch.tensor([[-1.0, 0.0, 0.0]], device=device)
+    angle = math_utils.angle_between_vecs(v1, v2)
+    torch.testing.assert_close(angle, torch.tensor([180.0], device=device), atol=1e-5, rtol=1e-5)
+
+    # Orthogonal vectors (angle = 90)
+    v1 = torch.tensor([[1.0, 0.0, 0.0]], device=device)
+    v2 = torch.tensor([[0.0, 1.0, 0.0]], device=device)
+    angle = math_utils.angle_between_vecs(v1, v2)
+    torch.testing.assert_close(angle, torch.tensor([90.0], device=device), atol=1e-5, rtol=1e-5)
+
+@pytest.mark.parametrize("device", ["cpu", "cuda:0"])
+def test_angle_between_vecs_batch(device):
+    """Test angle_between_vecs with a batch of vectors."""
+    v1 = torch.tensor([
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [1.0, 1.0, 0.0],
+        [1.0, 0.0, 0.0],
+    ], device=device)
+    v2 = torch.tensor([
+        [0.0, 1.0, 0.0],    # 90 deg
+        [0.0, 1.0, 0.0],    # 0 deg
+        [-1.0, 1.0, 0.0],   # 90 deg
+        [-1.0, 0.0, 0.0],   # 180 deg
+    ], device=device)
+    expected = torch.tensor([90.0, 0.0, 90.0, 180.0], device=device)
+    angle = math_utils.angle_between_vecs(v1, v2)
+    torch.testing.assert_close(angle, expected, atol=1e-5, rtol=1e-5)
+
+@pytest.mark.parametrize("device", ["cpu", "cuda:0"])
+def test_angle_between_vecs_random(device):
+    """Test angle_between_vecs with random vectors and compare to numpy."""
+    v1 = torch.randn(10, 3, device=device)
+    v2 = torch.randn(10, 3, device=device)
+    angle = math_utils.angle_between_vecs(v1, v2).cpu().numpy()
+    # Compute expected using numpy
+    v1_np = v1.cpu().numpy()
+    v2_np = v2.cpu().numpy()
+    cross = np.linalg.norm(np.cross(v1_np, v2_np), axis=1)
+    dot = np.sum(v1_np * v2_np, axis=1)
+    expected = np.rad2deg(np.arctan2(cross, dot))
+    np.testing.assert_allclose(angle, expected, atol=1e-5, rtol=1e-5)
+
+def test_angle_between_vecs_notable(device):
+    """Test angle_between_vecs with random vectors and compare to numpy."""
+    v1 = torch.tensor([[0.0, 0.0, 1.0]], device=device)
+    for i in range(-180,210, 30):
+        v2 = torch.tensor([[math.sin(math.radians(i)), 0.0, math.cos(math.radians(i))]], device=device)
+        angle = math_utils.angle_between_vecs(v1, v2).cpu().numpy()
+        # Compute expected using numpy
+        v1_np = v1.cpu().numpy()
+        v2_np = v2.cpu().numpy()
+        cross = np.linalg.norm(np.cross(v1_np, v2_np), axis=1)
+        dot = np.sum(v1_np * v2_np, axis=1)
+        expected = np.rad2deg(np.arctan2(cross, dot))
+        print("Checking angle between vectors:", v1_np, v2_np, "Expected:", expected, "Angle:", angle)
+        np.testing.assert_allclose(angle, expected, atol=1e-5, rtol=1e-5)

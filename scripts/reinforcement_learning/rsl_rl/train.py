@@ -132,10 +132,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # specify directory for logging runs: {time-stamp}_{run_name}
     log_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     # The Ray Tune workflow extracts experiment name using the logging line below, hence, do not change it (see PR #2346, comment-2819298849)
-    print(f"Exact experiment name requested from command line: {log_dir}")
     if agent_cfg.run_name:
         log_dir += f"_{agent_cfg.run_name}"
     log_dir = os.path.join(log_root_path, log_dir)
+    print(f"Exact experiment name requested from command line: {log_dir}")
 
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)

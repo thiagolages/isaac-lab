@@ -889,6 +889,29 @@ def subtract_frame_transforms(
         t12 = quat_apply(q10, -t01)
     return t12, q12
 
+# @torch.jit.script
+def angle_between_vecs(
+    vec1: torch.Tensor, vec2: torch.Tensor
+) -> torch.Tensor:
+    """Compute the angle between two vectors.
+
+    Args:
+        vec1: The first vector. Shape is (N, 3).
+        vec2: The second vector. Shape is (N, 3).
+        eps: A small value to avoid division by zero. Defaults to 1.0e-6.
+
+    Returns:
+        The angle between the two vectors in radians. Shape is (N,).
+    """
+
+    # Cross product for a batch of vectors
+    norm_cross_prod = torch.linalg.norm(torch.cross(vec1, vec2, dim=1), dim=1)
+
+    # Dot product for a batch of vectors (element-wise multiplication and sum)
+    dot_prod = torch.sum(vec1 * vec2, dim=1) # torch.dot() only supports 1D tensors
+
+    return torch.rad2deg(torch.atan2(norm_cross_prod, dot_prod))
+
 
 # @torch.jit.script
 def compute_pose_error(
@@ -896,7 +919,7 @@ def compute_pose_error(
     q01: torch.Tensor,
     t02: torch.Tensor,
     q02: torch.Tensor,
-    rot_error_type: Literal["quat", "axis_angle"] = "axis_angle",
+    rot_error_type: Literal["quat", "axis_angle", "z_axis"] = "axis_angle",
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Compute the position and orientation error between source and target frames.
 
@@ -905,7 +928,7 @@ def compute_pose_error(
         q01: Quaternion orientation of source frame in (w, x, y, z). Shape is (N, 4).
         t02: Position of target frame. Shape is (N, 3).
         q02: Quaternion orientation of target frame in (w, x, y, z). Shape is (N, 4).
-        rot_error_type: The rotation error type to return: "quat", "axis_angle".
+        rot_error_type: The rotation error type to return: "quat", "axis_angle", "z_axis".
             Defaults to "axis_angle".
 
     Returns:
@@ -939,6 +962,13 @@ def compute_pose_error(
         # Convert to axis-angle error
         axis_angle_error = axis_angle_from_quat(quat_error)
         return pos_error, axis_angle_error
+    elif rot_error_type == "z_axis":
+        # Compute the z-axis error
+        z_axis_source = quat_apply(q01, torch.tensor([0.0, 0.0, 1.0], device=t01.device).repeat(q01.shape[0], 1))
+        z_axis_target = quat_apply(q02, torch.tensor([0.0, 0.0, 1.0], device=t01.device).repeat(q02.shape[0], 1))
+        theta = angle_between_vecs(z_axis_source, z_axis_target)
+        # Since this is the error, return 90-theta
+        return None, 90 - theta
     else:
         raise ValueError(f"Unsupported orientation error type: {rot_error_type}. Valid: 'quat', 'axis_angle'.")
 
