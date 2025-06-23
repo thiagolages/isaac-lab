@@ -66,6 +66,7 @@ class UniformPoseCommand(CommandTerm):
         # -- metrics
         self.metrics["position_error"] = torch.zeros(self.num_envs, device=self.device)
         self.metrics["orientation_error"] = torch.zeros(self.num_envs, device=self.device)
+        self.metrics["orientation_error_z_axis"] = torch.zeros(self.num_envs, device=self.device)
 
     def __str__(self) -> str:
         msg = "UniformPoseCommand:\n"
@@ -104,8 +105,19 @@ class UniformPoseCommand(CommandTerm):
             self.robot.data.body_pos_w[:, self.body_idx],
             self.robot.data.body_quat_w[:, self.body_idx],
         )
+
+        # Compute the z-axis orientation error
+        _, z_error = compute_pose_error(
+            self.pose_command_w[:, :3],
+            self.pose_command_w[:, 3:],
+            self.robot.data.body_pos_w[:, self.body_idx],
+            self.robot.data.body_quat_w[:, self.body_idx],
+            rot_error_type="z_axis"
+        )
+
         self.metrics["position_error"] = torch.norm(pos_error, dim=-1)
         self.metrics["orientation_error"] = torch.norm(rot_error, dim=-1)
+        self.metrics["orientation_error_z_axis"] = z_error
 
     def _resample_command(self, env_ids: Sequence[int]):
         # sample new pose targets
