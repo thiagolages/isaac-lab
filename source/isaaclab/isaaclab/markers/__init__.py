@@ -22,4 +22,4 @@ Currently, the sub-package provides the following classes:
 """
 
 from .config import *  # noqa: F401, F403
-from .visualization_markers import VisualizationMarkers, VisualizationMarkersCfg
+from .visualization_markers import VisualizationMarkers, VisualizationMarkersCfg, CustomVisualizationMarkers

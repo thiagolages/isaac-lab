@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from isaaclab.assets import Articulation
 from isaaclab.managers import CommandTerm
-from isaaclab.markers import VisualizationMarkers
+from isaaclab.markers import VisualizationMarkers, CustomVisualizationMarkers
 from isaaclab.utils.math import combine_frame_transforms, compute_pose_error, quat_from_euler_xyz, quat_unique
 
 if TYPE_CHECKING:
@@ -145,7 +145,7 @@ class UniformPoseCommand(CommandTerm):
                 # -- goal pose
                 self.goal_pose_visualizer = VisualizationMarkers(self.cfg.goal_pose_visualizer_cfg)
                 # -- current body pose
-                self.current_pose_visualizer = VisualizationMarkers(self.cfg.current_pose_visualizer_cfg)
+                self.current_pose_visualizer = CustomVisualizationMarkers(self.cfg.current_pose_visualizer_cfg)
             # set their visibility to true
             self.goal_pose_visualizer.set_visibility(True)
             self.current_pose_visualizer.set_visibility(True)
