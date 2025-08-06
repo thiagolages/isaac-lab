@@ -964,11 +964,18 @@ def compute_pose_error(
         return pos_error, axis_angle_error
     elif rot_error_type == "z_axis":
         # Compute the z-axis error
-        z_axis_source = quat_apply(q01, torch.tensor([0.0, 0.0, 1.0], device=t01.device).repeat(q01.shape[0], 1))
-        z_axis_target = quat_apply(q02, torch.tensor([0.0, 0.0, 1.0], device=t01.device).repeat(q02.shape[0], 1))
-        theta = angle_between_vecs(z_axis_source, z_axis_target)
+        # TEMPORARY: CONSIDER -90DEG ROTATION AROUND Y AXIS for EFFECTOR
+        # TARGET IS q01 and EFFECTOR IS q02 !!
+        q02 = quat_mul(q02, quat_from_euler_xyz(
+            torch.zeros(q02.shape[0], device=q02.device),
+            torch.full((q02.shape[0],), -math.pi / 2.0, device=q02.device),
+            torch.zeros(q02.shape[0], device=q02.device)
+        ))
+        z_axis_target_w = quat_apply(q01, torch.tensor([0.0, 0.0, 1.0], device=t01.device).repeat(q02.shape[0], 1))
+        z_axis_eff_w = quat_apply(q02, torch.tensor([0.0, 0.0, 1.0], device=t01.device).repeat(q01.shape[0], 1))
+        theta = angle_between_vecs(z_axis_eff_w, z_axis_target_w)
         # Since this is the error, return 90-theta
-        return None, 90 - theta
+        return None, theta
     else:
         raise ValueError(f"Unsupported orientation error type: {rot_error_type}. Valid: 'quat', 'axis_angle'.")
 
