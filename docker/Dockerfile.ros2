@@ -10,29 +10,73 @@ FROM isaac-lab-base${DOCKER_NAME_SUFFIX} AS ros2
 ARG ROS2_APT_PACKAGE
 
 # ROS2 Humble Apt installations
-RUN --mount=type=cache,target=/var/cache/apt \
-    apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    # Install ROS2 Humble \
-    software-properties-common && \
-    add-apt-repository universe && \
-    curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo jammy) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null && \
-    apt-get update && apt-get install -y --no-install-recommends \
-    ros-humble-${ROS2_APT_PACKAGE} \
-    ros-humble-vision-msgs \
-    # Install both FastRTPS and CycloneDDS
-    ros-humble-rmw-cyclonedds-cpp \
-    ros-humble-rmw-fastrtps-cpp \
-    # This includes various dev tools including colcon
-    ros-dev-tools && \
-    # Install rosdeps for extensions that declare a ros_ws in
-    # their extension.toml
-    ${ISAACLAB_PATH}/isaaclab.sh -p ${ISAACLAB_PATH}/tools/install_deps.py rosdep ${ISAACLAB_PATH}/source && \
-    apt -y autoremove && apt clean autoclean && \
-    rm -rf /var/lib/apt/lists/* && \
-    # Add sourcing of setup.bash to .bashrc
+# RUN --mount=type=cache,target=/var/cache/apt \
+#     apt-get update && apt-get install -y --no-install-recommends \
+#     curl \
+#     # Install ROS2 Humble \
+#     software-properties-common && \
+#     add-apt-repository universe && \
+#     mkdir -p /etc/apt/keyrings; \
+#     curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key | gpg --dearmor -o /etc/apt/keyrings/ros-archive-keyring.gpg && \
+#     # curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
+#     # echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo jammy) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null && \
+#     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/ros-archive-keyring.gpg] https://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo jammy) main" > /etc/apt/sources.list.d/ros2.list; \
+#     apt-get update && apt-get install -y --no-install-recommends \
+#     ros-humble-${ROS2_APT_PACKAGE} \
+#     ros-humble-vision-msgs \
+#     # Install both FastRTPS and CycloneDDS
+#     ros-humble-rmw-cyclonedds-cpp \
+#     ros-humble-rmw-fastrtps-cpp \
+#     # This includes various dev tools including colcon
+#     ros-dev-tools && \
+#     # Install rosdeps for extensions that declare a ros_ws in
+#     # their extension.toml
+#     ${ISAACLAB_PATH}/isaaclab.sh -p ${ISAACLAB_PATH}/tools/install_deps.py rosdep ${ISAACLAB_PATH}/source && \
+#     apt -y autoremove && apt clean autoclean && \
+#     rm -rf /var/lib/apt/lists/* && \
+#     # Add sourcing of setup.bash to .bashrc
+#     echo "source /opt/ros/humble/setup.bash" >> ${HOME}/.bashrc
+
+# --- Install ROS 2 Humble repo (Jammy) robustly, with retries and fallback ---
+RUN set -eux; \
+    export DEBIAN_FRONTEND=noninteractive; \
+    # make apt itself more resilient
+    echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries; \
+    echo 'Acquire::http::Timeout "30";' > /etc/apt/apt.conf.d/80-timeouts; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        ca-certificates curl gnupg software-properties-common; \
+    add-apt-repository -y universe; \
+    mkdir -p /etc/apt/keyrings; \
+    # 1) Try GitHub (with retries) to fetch the ROS key and dearmor
+    ( curl -fsSL --retry 5 --retry-delay 2 --retry-connrefused \
+        https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+        | gpg --dearmor -o /etc/apt/keyrings/ros-archive-keyring.gpg ) \
+    # 2) Fallback to keyserver if GitHub is rate-limited (HTTP 429)
+    || ( \
+        gpg --no-default-keyring --keyring /tmp/ros.gpg \
+            --keyserver hkps://keyserver.ubuntu.com \
+            --recv-keys F42ED6FBAB17C654 \
+        && gpg --no-default-keyring --keyring /tmp/ros.gpg --export \
+            > /etc/apt/keyrings/ros-archive-keyring.gpg \
+        && rm -f /tmp/ros.gpg \
+    ); \
+    chmod 0644 /etc/apt/keyrings/ros-archive-keyring.gpg; \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/ros-archive-keyring.gpg] \
+            https://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" \
+            > /etc/apt/sources.list.d/ros2.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        ros-humble-${ROS2_APT_PACKAGE} \
+        ros-humble-vision-msgs \
+        ros-humble-rmw-cyclonedds-cpp \
+        ros-humble-rmw-fastrtps-cpp \
+        ros-dev-tools; \
+    apt-get -y autoremove; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*; \
     echo "source /opt/ros/humble/setup.bash" >> ${HOME}/.bashrc
+    
 
 # Copy the RMW specifications for ROS2
 # https://docs.isaacsim.omniverse.nvidia.com/latest/installation/install_ros.html
