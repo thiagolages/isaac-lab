@@ -122,29 +122,32 @@ class ContainerInterface:
 
         # build the image for the base profile if not running base (up will build base already if profile is base)
         if self.profile != "base":
-            subprocess.run(
-                [
-                    "docker",
-                    "compose",
-                    "--file",
-                    "docker-compose.yaml",
-                    "--env-file",
-                    ".env.base",
-                    "build",
-                    "isaac-lab-base",
-                ],
-                check=False,
-                cwd=self.context_dir,
-                env=self.environ,
+            cmd = (
+                ["docker", "compose"]
+                + ["--file", "docker-compose.yaml"]
+                + ["--profile", "base"]
+                + ["--env-file", ".env.base"]
+                + ["build", self.base_service_name]
             )
+            subprocess.run(cmd, check=False, cwd=self.context_dir, env=self.environ)
 
-        # build the image for the profile
+        # build the image for the service profile
+        cmd = (
+            ["docker", "compose"]
+            + self.add_yamls
+            + self.add_profiles
+            + self.add_env_files
+            + ["build", "--no-cache"]
+        )
+        subprocess.run(cmd, check=False, cwd=self.context_dir, env=self.environ)
+
+        # start the container
         subprocess.run(
             ["docker", "compose"]
             + self.add_yamls
             + self.add_profiles
             + self.add_env_files
-            + ["up", "--detach", "--build", "--remove-orphans"],
+            + ["up", "--detach", "--remove-orphans"],
             check=False,
             cwd=self.context_dir,
             env=self.environ,
